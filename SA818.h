@@ -18,6 +18,7 @@
 #ifndef SA818_h
 #define SA818_h
 
+#include <SomeSerial.h>
 #include <Stream.h>
 
 #define SA_BANDWIDTH_12_5KHZ	0
@@ -44,7 +45,7 @@
 
 class SA818 {
     public:
-        SA818(Stream *serial, uint8_t PIN_PTT, uint8_t PIN_PD, uint8_t PIN_HL);
+        SA818(SomeSerial *serial, uint8_t PIN_PTT, uint8_t PIN_PD, uint8_t PIN_HL, uint8_t PIN_AMP = 0);
 
         uint8_t begin();
         uint8_t setConfig(uint8_t bw, char* tx_f, char* rx_f, char* tx_ctcss, char* rx_ctcss, uint8_t squelch);
@@ -59,8 +60,11 @@ class SA818 {
 		void setModeRX();
 
     private:
-        Stream *serial;
-        uint8_t PTT_PIN, PD_PIN, HL_PIN;
+        //Stream *serial;
+        //NewSoftSerial *serial;
+        SomeSerial *serial;
+	
+        uint8_t PTT_PIN, PD_PIN, HL_PIN, AMP_PIN;
 
 		uint8_t readSerialTimeout();
 

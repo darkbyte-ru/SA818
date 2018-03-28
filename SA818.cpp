@@ -21,8 +21,9 @@
 #include <Stream.h>
 #include <avr/wdt.h>
 
+//#define DEBUG 1
 
-SA818::SA818(Stream *serial, uint8_t PIN_PTT, uint8_t PIN_PD, uint8_t PIN_HL)
+SA818::SA818(SomeSerial *serial, uint8_t PIN_PTT, uint8_t PIN_PD, uint8_t PIN_HL, uint8_t PIN_AMP = 0)
 {
 	this->serial = serial;
 	//this->serial->begin(9600);
@@ -30,10 +31,15 @@ SA818::SA818(Stream *serial, uint8_t PIN_PTT, uint8_t PIN_PD, uint8_t PIN_HL)
 	this->PTT_PIN = PIN_PTT;
 	this->PD_PIN = PIN_PD;
 	this->HL_PIN = PIN_HL;
+	this->AMP_PIN = PIN_AMP;
 
 	pinMode(this->PTT_PIN, OUTPUT);
 	pinMode(this->PD_PIN, OUTPUT);
 	pinMode(this->HL_PIN, OUTPUT);
+	if(this->AMP_PIN){
+		pinMode(this->AMP_PIN, OUTPUT);
+		digitalWrite(this->AMP_PIN, LOW);
+	}
 
 	digitalWrite(this->PTT_PIN, HIGH);
 	digitalWrite(this->PD_PIN, HIGH);
@@ -49,11 +55,7 @@ uint8_t SA818::readSerialTimeout()
 		wdt_reset();
 		while (this->serial->available() > 0) {
 #ifdef DEBUG			
-			if(this->serial != Serial){
-				Serial.write(this->serial->read());
-			}else{
-				this->serial->read();
-			}
+			Serial.write(this->serial->read());
 #else
 			this->serial->read();
 #endif			
@@ -61,19 +63,28 @@ uint8_t SA818::readSerialTimeout()
 		}
 		if (readed == true)break;
 	}
+#ifdef DEBUG			
+	if(!readed){
+		Serial.println("Read timeout");
+	}
+#endif			
 	return readed;
 }
 
 uint8_t SA818::begin()
 {
 	//not a commmand, but for sure
-	this->serial->write("AT\r\n");
-	delay(100);
+	this->serial->print("AT\r\n");
+	delay(500);
 
-	this->serial->write("AT+DMOCONNECT\r\n");
-
-	//got +DMOCONNECT:0<CR><LF>
-	return this->readSerialTimeout();
+	for(uint8_t r = 0; r<5; r++){
+		this->serial->print("AT+DMOCONNECT\r\n");
+		if(this->readSerialTimeout()){
+			//got +DMOCONNECT:0<CR><LF>
+			return true;
+		}
+	}
+	return false;
 }
 
 uint8_t SA818::setPower(uint8_t is_high)
@@ -94,27 +105,27 @@ uint8_t SA818::setConfig(uint8_t bw, char* tx_f, char* rx_f, char* tx_ctcss, cha
 	digitalWrite(this->PTT_PIN, HIGH);
 	delay(100); 
 
-	//char freq_buffer[10];
-	//dtostrf(this->tx_freq,8,4,freq_buffer);
-	//sprintf(this->buffer,"AT+DMOSETGROUP=0,%s,%s,%d,%1d,%d,1\r\n",freq_buffer,freq_buffer,this->tx_ctcss,this->squelch,this->rx_ctcss);
-	//this->serial->write(this->buffer);
-	this->serial->write("AT+DMOSETGROUP=");
-	this->serial->write(bw); // 0/1
-	this->serial->write(",");
-	this->serial->write(tx_f);//134-174/400-480, format to 415.1250
-	this->serial->write(",");
-	this->serial->write(rx_f);//format to 415.1250
-	this->serial->write(",");
-	this->serial->write(tx_ctcss);//format to 0000
-	this->serial->write(",");
-	this->serial->write(squelch); // <= 8
-	this->serial->write(",");
-	this->serial->write(rx_ctcss);
-	this->serial->write("\r\n");
+	for(uint8_t r=0; r<5; r++){
+		this->serial->print("AT+DMOSETGROUP=");
+		this->serial->print(bw); // 0/1
+		this->serial->print(",");
+		this->serial->print(tx_f);//134-174/400-480, format to 415.1250
+		this->serial->print(",");
+		this->serial->print(rx_f);//format to 415.1250
+		this->serial->print(",");
+		this->serial->print(tx_ctcss);//format to 0000
+		this->serial->print(",");
+		this->serial->print(squelch); // <= 8
+		this->serial->print(",");
+		this->serial->print(rx_ctcss);
+		this->serial->print("\r\n");
 
-//AT+DMOSETGROUP=0,415.1250,415.1250,0012,4, 0013 
+		if(this->readSerialTimeout()){
+			return true;
+		}
+	}
 
-  	return this->readSerialTimeout();
+	return false;
 }
 
 uint8_t SA818::setVolume(uint8_t volume)
@@ -127,9 +138,9 @@ uint8_t SA818::setVolume(uint8_t volume)
 	if(volume>8) volume = 8;
 
 	//sprintf(this->buffer,"AT+DMOSETVOLUME=%1d\r\n",this->volume);
-	this->serial->write("AT+DMOSETVOLUME=");
-	this->serial->write(volume);
-	this->serial->write("\r\n");
+	this->serial->print("AT+DMOSETVOLUME=");
+	this->serial->print(volume);
+	this->serial->print("\r\n");
 
 	return this->readSerialTimeout();
 }
@@ -142,15 +153,15 @@ uint8_t SA818::setFilters(boolean preemph, boolean highpass, boolean lowpass)
 	delay(100);
 
 	//sprintf(this->buffer,"AT+SETFILTER=%1d,%1d,%1d\r\n",this->preemph,this->highpass,this->lowpass);
-	//this->serial->write(this->buffer);
+	//this->serial->print(this->buffer);
 
-	this->serial->write("AT+SETFILTER=");
-	this->serial->write(preemph);
-	this->serial->write(",");
-	this->serial->write(highpass);
-	this->serial->write(",");
-	this->serial->write(lowpass);
-	this->serial->write("\r\n");
+	this->serial->print("AT+SETFILTER=");
+	this->serial->print(preemph);
+	this->serial->print(",");
+	this->serial->print(highpass);
+	this->serial->print(",");
+	this->serial->print(lowpass);
+	this->serial->print("\r\n");
 
 
 	//return true; //must be +DMOSETFILTER: X (X=0->ok, X=1-fail)
@@ -166,6 +177,9 @@ void SA818::powerDown(uint8_t powerdown)
 void SA818::changeMode(uint8_t mode)
 {
 	digitalWrite(this->PTT_PIN, mode);
+	if(this->AMP_PIN){
+		digitalWrite(this->AMP_PIN, !mode);
+	}
 }
 
 void SA818::setModeTX(){
